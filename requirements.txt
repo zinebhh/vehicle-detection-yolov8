@@ -1,0 +1,5 @@
+ultralytics>=8.3.0
+opencv-python>=4.8.0
+numpy>=1.24
+fiftyone>=0.23     # uniquement pour prepare_dataset.py (option COCO)
+roboflow>=1.1      # optionnel (option Roboflow)

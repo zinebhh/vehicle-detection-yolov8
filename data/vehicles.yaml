@@ -1,0 +1,12 @@
+# Exemple de configuration (écrasé par scripts/prepare_dataset.py)
+# Adaptez "path" vers le dossier de votre dataset YOLO.
+path: ./data/coco_vehicles
+train: images/train
+val: images/val
+
+nc: 4
+names:
+  0: car
+  1: motorcycle
+  2: bus
+  3: truck

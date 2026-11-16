@@ -1,0 +1,2 @@
+flask>=3.0
+imageio-ffmpeg>=0.5      # fournit ffmpeg pour une vidéo de sortie lisible dans le navigateur (H.264)

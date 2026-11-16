@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Détection de véhicules · YOLOv8</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#1f2937;--mut:#6b7280;--pri:#2563eb;--pri2:#1d4ed8;--ok:#16a34a;--err:#dc2626;--bd:#e5e7eb}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:22px 28px}
+header h1{margin:0;font-size:22px}header p{margin:4px 0 0;opacity:.85;font-size:14px}
+main{max-width:1100px;margin:24px auto;padding:0 16px;display:grid;gap:20px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:20px}
+h2{margin:0 0 14px;font-size:17px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}@media(max-width:800px){.grid{grid-template-columns:1fr}}
+#drop{border:2px dashed #93c5fd;border-radius:12px;padding:26px;text-align:center;color:var(--mut);cursor:pointer;background:#f8fbff}
+#drop.over{background:#dbeafe;border-color:var(--pri)}#drop b{color:var(--pri)}
+.pv{position:relative;margin-top:12px;display:none}.pv video{width:100%;border-radius:8px;background:#000;display:block}
+.pv .ln{position:absolute;left:0;right:0;height:0;border-top:3px solid #facc15;pointer-events:none}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+select,input[type=number],input[type=text]{width:100%;padding:8px;border:1px solid var(--bd);border-radius:8px;font:inherit}
+input[type=range]{width:100%}.row{display:flex;justify-content:space-between;font-size:13px}.row b{color:var(--ink)}
+button,.btn{background:var(--pri);color:#fff;border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+button:hover,.btn:hover{background:var(--pri2)}button:disabled{background:#9ca3af;cursor:not-allowed}
+.btn.sec{background:#eef2ff;color:var(--pri2)}.btn.sec:hover{background:#e0e7ff}.btn.red{background:#fee2e2;color:var(--err)}
+.btn.sm,button.sm{padding:6px 10px;font-size:13px}
+details{margin-top:10px}summary{cursor:pointer;color:var(--pri2);font-size:14px}
+.job{border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+.job h3{margin:0 0 6px;font-size:15px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.tag{font-size:12px;padding:2px 8px;border-radius:99px;background:#e5e7eb}.tag.done{background:#dcfce7;color:var(--ok)}
+.tag.error{background:#fee2e2;color:var(--err)}.tag.running{background:#dbeafe;color:var(--pri2)}
+.bar{height:10px;background:#e5e7eb;border-radius:99px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--pri);transition:width .3s}
+.res{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:10px}@media(max-width:800px){.res{grid-template-columns:1fr}}
+.res video{width:100%;border-radius:8px;background:#000}
+.kpi{font-size:38px;font-weight:700;color:var(--pri2);line-height:1}
+table{border-collapse:collapse;width:100%;font-size:14px}td,th{border-bottom:1px solid var(--bd);padding:6px 8px;text-align:left}
+.dl{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.muted{color:var(--mut);font-size:13px}.err{color:var(--err);font-size:14px}
+.imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}.imgs figure{margin:0}
+.imgs img{width:100%;border:1px solid var(--bd);border-radius:8px}.imgs figcaption{font-size:12px;color:var(--mut);text-align:center}
+</style>
+</head>
+<body>
+<header><h1>🚗 Détection, suivi et comptage de véhicules</h1>
+<p>Importez une vidéo de trafic → YOLOv8 + ByteTrack → exportez la vidéo annotée et les documents de résultats.</p></header>
+<main>
+
+<section class="card"><h2>1 · Importer et configurer</h2>
+<div class="grid"><div>
+  <div id="drop"><div>📹 Glissez une vidéo ici ou <b>cliquez pour choisir</b></div><div class="muted">mp4, avi, mov, mkv, webm</div></div>
+  <input id="file" type="file" accept="video/*" hidden>
+  <div class="pv" id="pv"><video id="pvv" muted controls></video><div class="ln" id="ln"></div></div>
+  <div class="muted" id="fname"></div>
+</div><div>
+  <label>Modèle</label><select id="model"></select>
+  <label>Importer vos poids (.pt) — par ex. <code>best.pt</code></label>
+  <input id="wfile" type="file" accept=".pt">
+  <div class="row"><span>Confiance minimale</span><b id="vconf">0.35</b></div><input id="conf" type="range" min="0.1" max="0.9" step="0.05" value="0.35">
+  <div class="row"><span>Position de la ligne de comptage</span><b id="vline">55 %</b></div><input id="line" type="range" min="10" max="90" step="1" value="55">
+  <details><summary>Options avancées</summary>
+    <label>IoU (NMS)</label><input id="iou" type="number" step="0.05" min="0.1" max="0.95" value="0.5">
+    <label>Taille d'image</label><select id="imgsz"><option>640</option><option>960</option><option>1280</option><option>480</option><option>320</option></select>
+    <label>Tracker</label><select id="tracker"><option value="bytetrack.yaml">ByteTrack</option><option value="botsort.yaml">BoT-SORT</option></select>
+    <label>Périphérique (vide = auto, cpu, 0)</label><input id="device" type="text" placeholder="auto">
+  </details>
+  <p><button id="go" disabled>▶ Lancer la détection</button> <span class="muted" id="upmsg"></span></p>
+  <div class="bar" id="upbar" style="display:none"><i style="width:0"></i></div>
+</div></div></section>
+
+<section class="card"><h2>2 · Résultats et exports</h2><div id="jobs"><p class="muted">Aucune tâche pour l'instant.</p></div></section>
+
+<section class="card"><h2>3 · Documents d'entraînement (dossier <code>runs/</code>)</h2><div id="train"><p class="muted">Chargement…</p></div></section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s), esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let file=null, timer=null;
+
+// ---------- modèles
+async function loadModels(sel){
+  const m=await (await fetch('/api/models')).json();
+  $('#model').innerHTML=m.map(x=>`<option value="${esc(x.id)}">${esc(x.label)}</option>`).join('');
+  if(sel) $('#model').value=sel; else if(m[0]) $('#model').value=m[0].id;
+}
+$('#wfile').onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const fd=new FormData(); fd.append('weights',f);
+  const r=await fetch('/api/models',{method:'POST',body:fd});
+  if(!r.ok){alert((await r.json()).error);return}
+  await loadModels(); const o=[...$('#model').options].find(o=>o.value.startsWith('webapp/models/')&&o.text.endsWith(f.name.replace(/[^\w.\-]/g,'_'))); if(o) $('#model').value=o.value;
+};
+
+// ---------- vidéo + aperçu de la ligne
+const drop=$('#drop');
+drop.onclick=()=>$('#file').click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('over')};
+drop.ondragleave=()=>drop.classList.remove('over');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');setFile(e.dataTransfer.files[0])};
+$('#file').onchange=e=>setFile(e.target.files[0]);
+function setFile(f){
+  if(!f) return; file=f; $('#fname').textContent=`${f.name} · ${(f.size/1048576).toFixed(1)} Mo`;
+  $('#pv').style.display='block'; $('#pvv').src=URL.createObjectURL(f); $('#go').disabled=false; moveLine();
+}
+function moveLine(){ $('#ln').style.top=$('#line').value+'%'; $('#vline').textContent=$('#line').value+' %'; }
+$('#line').oninput=moveLine; $('#conf').oninput=()=>$('#vconf').textContent=$('#conf').value;
+
+// ---------- envoi (avec progression d'upload)
+$('#go').onclick=()=>{
+  if(!file) return;
+  const fd=new FormData();
+  fd.append('video',file); fd.append('weights',$('#model').value); fd.append('conf',$('#conf').value);
+  fd.append('line',$('#line').value/100); fd.append('iou',$('#iou').value); fd.append('imgsz',$('#imgsz').value);
+  fd.append('tracker',$('#tracker').value); fd.append('device',$('#device').value);
+  const x=new XMLHttpRequest(); x.open('POST','/api/jobs'); $('#go').disabled=true; $('#upbar').style.display='block';
+  x.upload.onprogress=e=>{if(e.lengthComputable){$('#upbar i').style.width=(100*e.loaded/e.total)+'%';$('#upmsg').textContent='Envoi… '+Math.round(100*e.loaded/e.total)+' %'}};
+  x.onload=()=>{ $('#upbar').style.display='none'; $('#go').disabled=false;
+    if(x.status>=300){$('#upmsg').textContent='';alert(JSON.parse(x.responseText).error);return}
+    $('#upmsg').textContent='✔ Envoyée, traitement en cours…'; refresh(); };
+  x.onerror=()=>{$('#go').disabled=false;alert('Erreur réseau')};
+  x.send(fd);
+};
+
+// ---------- tâches
+const fmtDur=s=>s>=60?Math.floor(s/60)+' min '+Math.round(s%60)+' s':Math.round(s)+' s';
+function jobHtml(j){
+  const st={queued:'En file',running:'En cours',done:'Terminé',error:'Erreur',cancelled:'Annulé'}[j.status];
+  let h=`<div class="job" id="job-${j.id}"><h3><span>${esc(j.video_name)}</span><span class="tag ${j.status}">${st}</span></h3>
+  <div class="muted">${esc(j.weights)} · conf ${j.params.conf} · ligne ${Math.round(j.params.line*100)} % · imgsz ${j.params.imgsz}</div>`;
+  if(j.status==='running'||j.status==='queued'){
+    h+=`<div class="bar"><i style="width:${(j.progress||0)*100}%"></i></div>
+    <div class="row"><span>${j.total_frames?`Image ${j.frame}/${j.total_frames}`:'Initialisation…'} · comptés : ${Object.values(j.counts||{}).reduce((a,b)=>a+b,0)}</span>
+    <button class="btn red sm" onclick="act('${j.id}','cancel')">Annuler</button></div>`;
+  }
+  if(j.status==='error') h+=`<p class="err">${esc(j.error)}</p>`;
+  if(j.status==='done'){
+    const r=j.report, f=n=>`/api/jobs/${j.id}/files/${n}`;
+    const rows=Object.entries(r.comptage.par_classe).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')||'<tr><td colspan=2>Aucun franchissement</td></tr>';
+    const sens=Object.entries(r.comptage.par_sens).map(([k,v])=>`${esc(k)} : ${v}`).join(' · ');
+    h+=`<div class="res"><video controls preload="metadata" src="${f('video_annote.mp4')}"></video>
+    <div><div class="kpi">${r.comptage.total}</div><div class="muted">véhicules comptés · ${esc(sens)}</div>
+    <table style="margin-top:10px"><tr><th>Classe</th><th>Nombre</th></tr>${rows}</table>
+    <p class="muted">${r.video.largeur}×${r.video.hauteur} · ${r.video.duree_s} s · ${r.vehicules_suivis} véhicules suivis<br>
+    Traité en ${fmtDur(r.traitement.secondes)} (${r.traitement.fps_moyen} img/s)</p></div></div>
+    <div class="dl">
+      <a class="btn" href="${f('video_annote.mp4')}?download=1">⬇ Vidéo annotée</a>
+      <a class="btn sec" href="${f('comptage.csv')}?download=1">Comptage (CSV)</a>
+      <a class="btn sec" href="${f('vehicules.csv')}?download=1">Véhicules suivis (CSV)</a>
+      <a class="btn sec" href="${f('rapport.json')}?download=1">Rapport (JSON)</a>
+      <a class="btn sec" href="${f('rapport.html')}" target="_blank">Rapport (HTML, imprimable)</a>
+      <a class="btn sec" href="/api/jobs/${j.id}/bundle.zip">📦 Tout (ZIP)</a></div>`;
+  }
+  if(j.status!=='running'&&j.status!=='queued') h+=`<div style="margin-top:10px"><button class="btn red sm" onclick="act('${j.id}','delete')">Supprimer</button></div>`;
+  return h+'</div>';
+}
+async function act(id,what){
+  if(what==='cancel') await fetch(`/api/jobs/${id}/cancel`,{method:'POST'});
+  else if(confirm('Supprimer cette tâche et ses fichiers ?')) await fetch(`/api/jobs/${id}`,{method:'DELETE'});
+  refresh();
+}
+async function refresh(){
+  const jobs=await (await fetch('/api/jobs')).json();
+  const active=jobs.some(j=>j.status==='running'||j.status==='queued');
+  // on ne reconstruit que les cartes dont l'état a changé (évite de couper la lecture vidéo)
+  const box=$('#jobs');
+  if(!jobs.length){box.innerHTML='<p class="muted">Aucune tâche pour l\'instant.</p>'}
+  else{
+    box.querySelectorAll('p.muted').forEach(p=>p.remove());
+    const ids=jobs.map(j=>j.id);
+    box.querySelectorAll('.job').forEach(el=>{if(!ids.includes(el.id.slice(4)))el.remove()});
+    jobs.forEach((j,i)=>{
+      const sig=j.status+'|'+(j.status==='done'?'':j.progress+'|'+JSON.stringify(j.counts));
+      let el=document.getElementById('job-'+j.id);
+      if(!el||el.dataset.sig!==sig){
+        const t=document.createElement('div'); t.innerHTML=jobHtml(j); const n=t.firstElementChild; n.dataset.sig=sig;
+        if(el) el.replaceWith(n); else box.insertBefore(n,box.children[i]||null);
+      }
+    });
+  }
+  clearTimeout(timer); if(active) timer=setTimeout(refresh,1500);
+}
+
+// ---------- documents d'entraînement
+async function loadTrain(){
+  const d=await (await fetch('/api/training')).json(); let h='';
+  if(d.evaluation){
+    const e=d.evaluation, rows=Object.entries(e.per_class||{}).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v.precision.toFixed(3)}</td><td>${v.recall.toFixed(3)}</td><td>${v.map50.toFixed(3)}</td><td>${v.map50_95.toFixed(3)}</td></tr>`).join('');
+    h+=`<p><b>mAP@0.5 = ${e['mAP50'].toFixed(3)}</b> · mAP@0.5:0.95 = ${e['mAP50-95'].toFixed(3)} · P = ${e.precision.toFixed(3)} · R = ${e.recall.toFixed(3)} · inférence ${e.speed_ms.inference.toFixed(1)} ms/img</p>
+    <table><tr><th>Classe</th><th>Précision</th><th>Rappel</th><th>mAP50</th><th>mAP50-95</th></tr>${rows}</table>`;
+  }
+  const imgs=d.files.filter(f=>f.kind==='image'&&/results|confusion|PR_curve|F1_curve|P_curve|R_curve|val_batch\d_pred/.test(f.path));
+  if(imgs.length) h+=`<div class="imgs" style="margin-top:14px">${imgs.map(f=>`<figure><a href="/api/training/${encodeURI(f.path)}" target="_blank"><img loading="lazy" src="/api/training/${encodeURI(f.path)}"></a><figcaption>${esc(f.path.split('/').pop())}</figcaption></figure>`).join('')}</div>`;
+  const dl=d.files.filter(f=>f.kind!=='image');
+  if(dl.length) h+=`<div class="dl">${dl.map(f=>`<a class="btn sec sm" href="/api/training/${encodeURI(f.path)}?download=1">⬇ ${esc(f.path)} <span class="muted">(${(f.size/1024).toFixed(0)} Ko)</span></a>`).join('')}</div>`;
+  $('#train').innerHTML=h||'<p class="muted">Aucun résultat d\'entraînement trouvé. Lancez <code>train.py</code> et <code>evaluate.py</code> : les courbes, la matrice de confusion et <code>evaluation.json</code> apparaîtront ici.</p>';
+}
+loadModels(); refresh(); loadTrain();
+</script>
+</body></html>
